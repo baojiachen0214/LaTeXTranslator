@@ -1,0 +1,214 @@
+\documentclass[12pt,a4paper]{ctexart}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumerate}
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{natbib}
+\usepackage{xcolor}
+\usepackage{listings}
+
+% 页面设置
+\geometry{margin=1in}
+
+% 定理环境定义
+\newtheorem{theorem}{定理}[section]
+\newtheorem{lemma}[theorem]{引理}
+\newtheorem{corollary}[theorem]{推论}
+\newtheorem{definition}[theorem]{定义}
+
+% 代码样式设置
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    stringstyle=\color{red},
+    commentstyle=\color{green!60!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true
+}
+
+% 标题信息
+\title{全面的LaTeX语法示例文档}
+\author{
+    张三 \\
+    \small 计算机科学系，XYZ大学 \\
+    \small \href{mailto:zhangsan@example.com}{zhangsan@example.com}
+    \and
+    李四 \\
+    \small 数学研究所，ABC研究中心 \\
+    \small \href{mailto:lisi@example.com}{lisi@example.com}
+}
+\date{\today}
+\begin{document}
+
+\maketitle
+\begin{abstract}
+本文档展示了各种核心LaTeX语法元素，包括文档结构、数学公式、图形插入、列表环境、算法伪代码和参考文献引用。通过这个全面的例子，可以快速了解LaTeX的主要功能和使用方法。
+\end{abstract}
+
+\section{介绍}
+\label{sec:introduction}
+
+LaTeX是一个基于TeX的排版系统，特别适合生成高质量的技术和数学文档\cite{lamport1994latex}。与普通的文字处理软件相比，它使用标记命令来控制文档格式，能够更好地处理复杂的数学公式和专业排版。
+
+\subsection{主要特点}
+LaTeX具有以下主要特点：
+\begin{itemize}
+    \item Powerful mathematical formula typesetting capabilities
+    \item Automatic generation of table of contents, cross-references, and bibliographies
+    \item Highly customizable document styles
+    \item Support for complex table and figure排版
+    \item Suitable for collaborative editing of large documents
+\end{itemize}
+
+\section{数学公式}
+\label{sec:math}
+
+\subsection{行内公式}
+行内公式如 $a^2 + b^2 = c^2$（勾股定理）和 $e^{i\pi} + 1 = 0$（欧拉恒等式）可以直接嵌入文本中。
+
+\subsection{独立公式}
+复杂的公式通常单独成行显示：
+\begin{equation}
+    \int\_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+    \label{eq:gaussian}
+\end{equation}
+
+\subsection{多行公式}
+使用align环境进行多行公式的排版：
+\begin{align}
+    \sin(A+B) &= \sin A \cos B + \cos A \sin B \\
+    \cos(A+B) &= \cos A \cos B-\sin A \sin B
+\end{align}
+
+\subsection{矩阵}
+矩阵表示示例：
+\[
+\mathbf{M} =
+\begin{pmatrix}
+    m_{11} & m_{12} & \cdots & m_{1n} \\
+    m_{21} & m_{22} & \cdots & m_{2n} \\
+    \vdots & \vdots & \ddots & \vdots \\
+    m_{m1} & m_{m2} & \cdots & m_{mn}
+\end{pmatrix}
+\]
+
+\section{定理和定义}
+\label{sec:theorems}
+\begin{definition}
+设$f(x)$在区间$[a,b]$上定义。如果对于任意$\epsilon > 0$，存在$\delta > 0$使得当$|x-x_0| < \delta$时，有$|f(x)-f(x_0)| < \epsilon$，则称$f(x)$在$x_0$处连续。
+\end{definition}
+\begin{theorem}
+If a function $f(x)$ is continuous on the closed interval $[a,b]$, then $f(x)$ is uniformly continuous on $[a,b]$.
+\end{theorem}
+\begin{lemma}
+如果数列$\{a_n\}$单调且有界，则$\{a_n\}$必定收敛。
+\end{lemma}
+
+\section{图形和表格}
+\label{sec:figures}
+\begin{figure}[htbp]
+    \centering
+\begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{example-image-a}
+        \caption{Sample image A}
+        \label{fig:sub1}
+\end{subfigure}
+    \hfill
+\begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{example-image-b}
+        \caption{Sample image B}
+        \label{fig:sub2}
+\end{subfigure}
+    \caption{Example of subfigures}
+    \label{fig:main}
+\end{figure}
+
+表\ref{tab:example}展示了一个简单的数据对比。
+\begin{table}[h!]
+    \centering
+\begin{tabular}{|c|c|c|}
+        \hline
+        Method & Accuracy (\%) & Runtime (s) \\
+        \hline
+        A & 85.2 & 12.3 \\
+        B & 90.5 & 18.7 \\
+        C & 92.1 & 22.5 \\
+        \hline
+\end{tabular}
+    \caption{Performance comparison of different methods}
+    \label{tab:example}
+\end{table}NK\_1071F892\_\_
+
+表\ref{tab:example}显示了一个简单的数据比较。
+\begin{table}[h!]
+    \centering
+\begin{tabular}{|c|c|c|}
+        \hline
+        Method & Accuracy (\%) & Runtime (s) \\
+        \hline
+        A & 85.2 & 12.3 \\
+        B & 90.5 & 18.7 \\
+        C & 92.1 & 22.5 \\
+        \hline
+\end{tabular}
+    \caption{Performance comparison of different methods}
+    \label{tab:example}
+\end{table}
+
+\section{算法}
+\label{sec:algorithms}
+
+以下算法\ref{alg:euclidean}描述了用于寻找最大公约数的欧几里得算法。
+\begin{algorithm}
+    \caption{欧几里得算法}
+    \label{alg:euclidean}
+\begin{algorithmic}[1]
+        \Function{GCD}{$a, b$}
+            \While{$b \neq 0$}
+                \State $r \gets a \mod b$
+                \State $a \gets b$
+                \State $b \gets r$
+            \EndWhile
+            \Return $a$
+        \EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\section{代码示例}
+\label{sec:code}
+
+下面展示了一个计算阶乘的简单Python函数：
+\begin{lstlisting}
+def factorial(n):
+    """Calculate the factorial of a non-negative integer"""
+    if n < 0:
+        raise ValueError("Factorial is not defined for negative numbers")
+    result = 1
+    for i in range(1, n+1):
+        result *= i
+    return result
+
+# Example usage
+print(factorial(5))  # Output: 120
+\end{lstlisting}
+
+\section{结论}
+\label{sec:conclusion}
+
+本文档涵盖了LaTeX排版的各种基本要素。通过掌握这些基本语法和环境，可以创建专业且格式良好的技术文档。有关更多高级功能，请参阅全面的LaTeX文档及相关包。
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+\end{document}
