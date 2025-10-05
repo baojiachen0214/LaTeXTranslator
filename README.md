@@ -74,6 +74,10 @@ python -m trans --config config.yaml
 ```yaml
 mode: "arxiv"  # arxiv | single | project
 
+# Project name (optional)
+# When specified, results will be saved in a timestamped subdirectory under output.dir
+project_name: "MyLaTeXProject"
+
 input:
   url: "https://arxiv.org/abs/2301.12345"
 

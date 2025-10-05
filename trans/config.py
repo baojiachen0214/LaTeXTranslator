@@ -91,6 +91,8 @@ class AppConfig:
     """
     # Operation mode: "arxiv", "single", or "project"
     mode: str = "arxiv"
+    # Project name for identification (optional)
+    project_name: Optional[str] = None
     # Input configuration
     input: InputConfig = field(default_factory=InputConfig)
     # Output configuration
@@ -157,10 +159,12 @@ class AppConfig:
         input_config = InputConfig(**filtered_input_data)
         prompts_config = PromptsConfig(**filtered_prompts_data)
 
-        # --- 5. Extract top-level AppConfig fields (mode) ---
+        # --- 5. Extract top-level AppConfig fields (mode, project_name) ---
         app_data = {}
         if 'mode' in data:  # <-- Fixed: complete if statement
             app_data['mode'] = data['mode']
+        if 'project_name' in data:
+            app_data['project_name'] = data['project_name']
 
         # --- 6. Create and return AppConfig instance ---
         return cls(

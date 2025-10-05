@@ -91,62 +91,7 @@ def fix_llm_latex_artifacts(translated_text: str, original_text: str = "") -> st
     # Avoid accidental single-char prefix characters before \begin (like lines starting with '+ \begin')
     text = re.sub(r'(?m)^[ \t]*[+\-*/=]{1,2}\s*(\\begin\{)', r'\1', text)
 
-    # 最后处理所有数学环境中的 \_
-    def _replace_underscore_in_math(match):
-        content = match.group(0)
-        return content.replace('\\_', '_')
-
-    # 匹配各种数学环境
-    # 匹配各种数学环境，包括行内和行间数学模式
-    math_patterns = [
-        r'\\begin\{equation\}.*?\\end\{equation\}',
-        r'\\begin\{align\}.*?\\end\{align\}',
-        r'\\begin\{gather\}.*?\\end\{gather\}',
-        r'\\begin\{equation\*\}.*?\\end\{equation\*\}',
-        r'\\begin\{align\*\}.*?\\end\{align\*\}',
-        r'\\begin\{gather\*\}.*?\\end\{gather\*\}',
-        r'\\begin\{multline\}.*?\\end\{multline\}',
-        r'\\begin\{multline\*\}.*?\\end\{multline\*\}',
-        r'\\begin\{flalign\}.*?\\end\{flalign\}',
-        r'\\begin\{flalign\*\}.*?\\end\{flalign\*\}',
-        r'\$\$.*?\$\$',
-        r'\$.*?\$',
-        r'\\\[.*?\\\]'
-    ]
-
-    def remove_empty_braces_smart(text):
-        # 找到所有特殊环境的位置
-        special_envs = [
-            r'\\begin\{tikzpicture\}.*?\\end\{tikzpicture\}',
-            r'\\begin\{verbatim\}.*?\\end\{verbatim\}',
-            r'\\begin\{lstlisting\}.*?\\end\{lstlisting\}',
-            r'\\begin\{minted\}.*?\\end\{minted\}',
-            r'\\begin\{alltt\}.*?\\end\{alltt\}'
-        ]
-
-        # 保存特殊环境内容
-        saved_envs = {}
-        for i, env_pattern in enumerate(special_envs):
-            matches = re.findall(env_pattern, text, flags=re.DOTALL)
-            for j, match in enumerate(matches):
-                placeholder = f'<<SPECIAL_ENV_{i}_{j}>>'
-                saved_envs[placeholder] = match
-                text = text.replace(match, placeholder, 1)
-
-        # 在正文区域移除空的 {}
-        text = re.sub(r'(?<!\\)\{\}', '', text)
-
-        # 恢复特殊环境
-        for placeholder, env_content in saved_envs.items():
-            text = text.replace(placeholder, env_content)
-
-        return text
-
-    # 使用智能移除方法替代原来的简单替换
-    text = remove_empty_braces_smart(text)
-
-    for pattern in math_patterns:
-        text = re.sub(pattern, _replace_underscore_in_math, text, flags=re.DOTALL)
+    text = re.sub(r'(?<!\\)\{\}', '', text)
 
     # 为 \begin{} 命令添加换行 - 如果前面有字符则在前面添加换行
     text = re.sub(r'(?<=\S)(\s*)(\\begin\{)', r'\n\2', text)

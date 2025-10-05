@@ -11,6 +11,7 @@ from trans.build.compiler import compile_project
 from trans.utils.logger import logger
 import asyncio
 import shutil
+from datetime import datetime
 
 # Initialize the Typer CLI application
 app = typer.Typer()
@@ -45,11 +46,23 @@ def main(
     output_dir = Path(cfg.output.dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # If project_name is specified, create a time-stamped subdirectory under output_dir
+    if cfg.project_name:
+        # Generate date and time for the run
+        now = datetime.now()
+        date_str = now.strftime("%Y%m%d")
+        time_str = now.strftime("%H%M%S")
+        # Create project directory with project_name/date/time structure
+        project_output_dir = output_dir / cfg.project_name / date_str / time_str
+    else:
+        # If no project_name specified, use output_dir directly
+        project_output_dir = output_dir
+
     # Handle different operation modes
     if cfg.mode == "arxiv":
         # ArXiv mode: download paper from arXiv, translate, and optionally compile
-        source_dir = output_dir / "source"
-        translated_dir = output_dir / "translated_source"
+        source_dir = project_output_dir / "source"
+        translated_dir = project_output_dir / "translated_source"
         logger.info(f"Mode: arxiv. Downloading from {cfg.input.url}")
         # Download arXiv paper source files
         download_arxiv_project(cfg.input.url, source_dir, use_cache=True)  # Add cache option if needed
@@ -58,12 +71,12 @@ def main(
         asyncio.run(translate_project(source_dir, translated_dir))
         # Compile the translated project if compilation is enabled
         if cfg.output.compile:
-            compile_project(translated_dir, output_dir / f"translated_paper.pdf")
+            compile_project(translated_dir, project_output_dir / f"translated_paper.pdf")
 
     elif cfg.mode == "single":
         # Single file mode: translate a single .tex file
         input_path = Path(cfg.input.path)
-        output_path = output_dir / input_path.name
+        output_path = project_output_dir / input_path.name
         logger.info(f"Mode: single. Translating file {input_path}")
         # Load the content of the single file
         content = load_tex_file(input_path)
@@ -87,7 +100,7 @@ def main(
     elif cfg.mode == "project":
         # Project mode: translate an entire LaTeX project directory
         input_dir = Path(cfg.input.dir)
-        translated_dir = output_dir / "translated_project"
+        translated_dir = project_output_dir / input_dir.name
         logger.info(f"Mode: project. Translating project {input_dir}")
         # Load all .tex files from the project directory
         project_map = load_tex_project(input_dir)
@@ -117,7 +130,7 @@ def main(
                     shutil.copy2(src_file, dst_file)
         # Compile the entire translated project if compilation is enabled
         if cfg.output.compile:
-            compile_project(translated_dir, output_dir / f"translated_project.pdf")
+            compile_project(translated_dir, project_output_dir / f"{input_dir.name}.pdf")
 
 
 async def translate_project(source_dir: Path, translated_dir: Path):

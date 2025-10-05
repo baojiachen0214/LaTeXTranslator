@@ -210,6 +210,138 @@ def replace_documentclass(tex: str) -> str:
     return pattern.sub(_repl, tex, count=1)  # Only replace the first documentclass
 
 
+def fix_citation_issues(tex: str) -> str:
+    """
+    trans \cite{\cite{...}} to \cite{...}
+    """
+    tex = re.sub(r'\\cite\{\\cite\{([^}]*)\}\}', r'\\cite{\1}', tex)
+    return tex
+
+
+import re
+
+
+def fix_tikz_issues(tex: str) -> str:
+    # 匹配整个 tikzpicture 环境
+    tikz_pattern = re.compile(r'\\begin\{tikzpicture\}(.*?)\\end\{tikzpicture\}', re.DOTALL)
+
+    def process_tikz_content(match):
+        tikz_content = match.group(1)
+
+        # 处理 .s++ 问题，避免影响包含类似模式的引用
+        tikz_content = re.sub(r'(\.s\s*\+\+)(?![^}]*\\cite)', r'.controls \1', tikz_content)
+
+        # 修复 TikZ 中的 \node 命令问题
+        def fix_node_command(node_match):
+            node_content = node_match.group(0)
+            # 检查是否包含引用，若包含则不处理
+            if r'\cite' in node_content:
+                return node_content
+
+            semicolon_pos = node_content.find(';')
+            if semicolon_pos != -1:
+                before_semicolon = node_content[:semicolon_pos]
+                if '{}' not in before_semicolon:
+                    return node_content[:semicolon_pos] + ' {}' + node_content[semicolon_pos:]
+            return node_content
+
+        # 只在 tikz 环境内处理 node 命令
+        tikz_content = re.sub(r'\\node[^;]*;', fix_node_command, tikz_content)
+        return f'\\begin{{tikzpicture}}{tikz_content}\\end{{tikzpicture}}'
+
+    # 只对 tikzpicture 环境内部的内容进行处理
+    fixed_tex = tikz_pattern.sub(process_tikz_content, tex)
+    return fixed_tex
+
+
+def fix_special_chars(tex: str) -> str:
+    # 定义需要处理的环境列表（表格和绘图相关）
+    environments = [
+        'tabular', 'tabular*', 'tabu', 'array',  # 表格环境
+        'tikzpicture', 'pgfpicture',  # TikZ绘图环境
+        'figure', 'table',  # 浮动体环境
+        'tabularx', 'tabulary', 'longtable'  # 其他表格环境
+    ]
+
+    # 构建匹配这些环境的正则表达式（修正转义问题）
+    # 正确处理带星号的环境，如tabular*、figure*等
+    env_patterns = [
+        fr'\\begin\{{{env}(?:\*)?\}}.*?\\end\{{{env}(?:\*)?\}}'
+        for env in environments
+    ]
+    combined_pattern = re.compile('|'.join(env_patterns), re.DOTALL)
+
+    def process_environment(match):
+        content = match.group(0)
+
+        # 保护引用内容不被处理
+        cite_pattern = re.compile(r'\\cite(?:\w+)?\{[^\}]+\}')
+        protected_cites = []
+
+        def protect_cite(m):
+            cite = m.group(0)
+            # 替换引用中的特殊字符为临时标记
+            protected = cite.replace('{@', '___CITE_AT_OPEN___') \
+                .replace('@}', '___CITE_AT_CLOSE___') \
+                .replace('.)', '___CITE_DOT_PAREN___')
+            protected_cites.append(protected)
+            return f'___PROTECTED_CITE_{len(protected_cites) - 1}___'
+
+        # 先保护所有引用
+        content = cite_pattern.sub(protect_cite, content)
+
+        # 只在环境内部进行特殊字符替换
+        content = content.replace('{@', '{@{}')
+        content = content.replace('@}', '@{}}')
+        content = content.replace('.)', '..')
+
+        # 恢复受保护的引用
+        for i, cite in enumerate(protected_cites):
+            restored_cite = cite.replace('___CITE_AT_OPEN___', '{@') \
+                .replace('___CITE_AT_CLOSE___', '@}') \
+                .replace('___CITE_DOT_PAREN___', '.)')
+            content = content.replace(f'___PROTECTED_CITE_{i}___', restored_cite)
+
+        return content
+
+    # 只对指定环境内的内容进行处理
+    fixed_tex = combined_pattern.sub(process_environment, tex)
+    return fixed_tex
+
+
+def fix_underline_issues(tex: str) -> str:
+    # 数学环境模式 - 包含更多常见的数学环境
+    math_patterns = [
+        r'\\begin\{equation\}.*?\\end\{equation\}',
+        r'\\begin\{align\}.*?\\end\{align\}',
+        r'\\begin\{gather\}.*?\\end\{gather\}',
+        r'\\begin\{equation\*\}.*?\\end\{equation\*\}',
+        r'\\begin\{align\*\}.*?\\end\{align\*\}',
+        r'\\begin\{gather\*\}.*?\\end\{gather\*\}',
+        r'\\begin\{multline\}.*?\\end\{multline\}',
+        r'\\begin\{multline\*\}.*?\\end\{multline\*\}',
+        r'\\begin\{flalign\}.*?\\end\{flalign\}',
+        r'\\begin\{flalign\*\}.*?\\end\{flalign\*\}',
+        # r'\$\$.*?\$\$',  # 无编号公式
+        # r'\$.*?\$',  # 行内公式
+        # r'\\\[.*?\\\]'  # 另一种无编号公式
+    ]
+
+    # 使用非贪婪匹配并添加适当的边界，避免跨环境匹配
+    combined_pattern = re.compile('|'.join(f'({p})' for p in math_patterns), re.DOTALL)
+
+    def replace_underscore(match):
+        # 找到第一个非None的匹配组
+        content = next(g for g in match.groups() if g is not None)
+        # 只替换数学环境中的\_为_，不影响其他部分
+        return content.replace(r'\_', '_')
+
+    # 执行替换
+    fixed_tex = combined_pattern.sub(replace_underscore, tex)
+
+    return fixed_tex
+
+
 def compile_project(project_dir: Path, output_pdf_path: Path):
     """
     Compile a LaTeX project directory to generate a PDF file.
@@ -254,6 +386,10 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
 
     # 2) Escape underscores conservatively (avoid math, verbatim, etc.)
     tex_content = escape_underscores(tex_content)
+    tex_content = fix_special_chars(tex_content)
+    tex_content = fix_citation_issues(tex_content)
+    tex_content = fix_tikz_issues(tex_content)
+    tex_content = fix_underline_issues(tex_content)
 
     # Write back the processed file (overwrite the main .tex file)
     with open(main_path, 'w', encoding='utf-8') as f:
@@ -262,24 +398,53 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
     logger.info("Post-processing complete. Starting compilation...")
 
     # Determine if bibtex is needed for bibliography processing
-    need_bibtex = any((project_dir / f).suffix == '.bib' for f in project_dir.iterdir())
-    if not need_bibtex:
-        # Also check if any tex file contains bibliography commands
-        for content in candidate_tex_files.values():
-            if "\\bibliography{" in content:
+    bib_files = [f for f in project_dir.iterdir() if f.suffix == '.bib']
+    need_bibtex = len(bib_files) > 0
+    
+    # Check if any tex file contains bibliography commands
+    force_bibtex = False
+    bibliography_commands = []
+    for content in candidate_tex_files.values():
+        # Look for \bibliography command and extract the bib file names
+        bib_matches = re.findall(r'\\bibliography\{([^}]+)\}', content)
+        if bib_matches:
+            force_bibtex = True
+            for match in bib_matches:
+                # Split multiple bib files separated by commas
+                bib_files_names = match.split(',')
+                bibliography_commands.extend(bib_files_names)
+    
+    # If we found bibliography commands, check if the bib files exist in parent directories
+    if force_bibtex and not need_bibtex:
+        for bib_file_name in bibliography_commands:
+            # Check in the current project directory
+            if (project_dir / f"{bib_file_name.strip()}.bib").exists():
                 need_bibtex = True
                 break
+            # Check in parent directories
+            parent = project_dir.parent
+            while parent != parent.parent:  # Stop at root directory
+                if (parent / f"{bib_file_name.strip()}.bib").exists():
+                    need_bibtex = True
+                    break
+                parent = parent.parent
 
     try:
         # Step 1: First xelatex compilation
         logger.info("Running first xelatex compilation...")
         subprocess.run(['xelatex', '-interaction=nonstopmode', main_tex], cwd=project_dir, check=True)
 
-        # Step 2: Run bibtex if bibliography is needed
-        if need_bibtex:
+        # Step 2: Run bibtex if bibliography is needed or forced
+        if need_bibtex or force_bibtex:
             logger.info("Running bibtex for bibliography processing...")
             aux_file = main_tex.replace('.tex', '.aux')
-            subprocess.run(['bibtex', aux_file], cwd=project_dir, check=True)
+            try:
+                subprocess.run(['bibtex', aux_file], cwd=project_dir, check=True)
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"Failed to run bibtex: {e}. Continuing compilation without bibtex.")
+                # Try to continue compilation even if bibtex fails
+        else:
+            logger.info("No bibliography detected, skipping bibtex.")
 
         # Step 3: Second xelatex compilation (to resolve citations and cross-references)
         logger.info("Running second xelatex compilation...")
