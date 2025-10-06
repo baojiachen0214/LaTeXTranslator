@@ -110,7 +110,7 @@ def main(
         translated_map = {}
         # Translate each file in the project
         for rel_path, content in project_map.items():
-            logger.info(f"Translating {rel_path}...")
+            logger.info(f"→ Translating {rel_path}...")
             translated_content = asyncio.run(translator.translate_content(content))
             translated_map[rel_path] = translated_content
         # Write all translated files to the output directory

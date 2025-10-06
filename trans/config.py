@@ -11,7 +11,7 @@ class LLMConfig:
     """
     Configuration for Large Language Model backend settings.
     """
-    # Backend provider (e.g., "openai", "aliyun")
+    # Backend provider (e.g., "openai", "aliyun", "generic")
     backend: str = "openai"
     # Model name to use for translation
     model: str = "gpt-4o-mini"

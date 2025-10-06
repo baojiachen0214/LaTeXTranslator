@@ -1,3 +1,3 @@
 # trans/__init__.py
-__version__ = "0.0.2" # Update version
+__version__ = "0.1.0"
 __author__ = "Jiachen Bao"

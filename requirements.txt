@@ -4,4 +4,6 @@ arxiv>=1.0.0
 typer>=0.9.0
 rich>=13.0.0
 PyYAML>=6.0
-dashscope>=1.14.0 # <-- 新增
+dashscope>=1.14.0
+yaml~=0.2.5
+dataclasses~=0.8

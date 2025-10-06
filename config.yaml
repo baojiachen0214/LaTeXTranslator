@@ -1,18 +1,14 @@
-# config.example.yaml
-mode: "project"  # arxiv | single | project
+# config.yaml
+project_name: "LaTeXProject"
+mode: "project"
 
-# Input
 input:
-  url: "https://arxiv.org/..."  # arxiv URL or local path
-  path: "./demo/document.tex"        # for mode=single
-  dir: "./demo/"          # for mode=project
+  dir: "./demo/demo_project"         # for mode=project
 
-# Output
 output:
   dir: "./output"
   compile: true
 
-# Translation settings
 translation:
   target_lang: "Chinese"
   chunk_size: 3800
@@ -20,12 +16,11 @@ translation:
   fix_hyphen: true
   fix_command_adhesion: true
 
-# LLM settings
 llm:
-  backend: "openai"
-  model: "gpt-4o-mini"
-  api_key_env: "LLM_API_KEY"
-  base_url: "https://api.openai.com/v1/"
+  backend: "aliyun"
+  model: "qwen-max"
+  api_key: <-- replace with your own api key -->
+  base_url: "https://dashscope.aliyuncs.com/api/v1"
   temperature: 0.1
   top_p: 0.9
   max_concurrent: 15

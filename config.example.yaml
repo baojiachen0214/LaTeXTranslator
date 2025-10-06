@@ -1,22 +1,23 @@
 # config.example.yaml
+
+# ======== General settings ========
+# Project name (optional, for identifying the project)
+# When specified, results will be saved in a timestamped subdirectory under output.dir
+project_name: "MyLaTeXProject"
 mode: "project"  # arxiv | single | project
 
-# Input
+# ======== Input settings ========
 input:
-#  url: "https://arxiv.org/..."  # arxiv URL or local path
-#  path: "./demo/document.tex"        # for mode=single
+  url: "https://arxiv.org/..."        # arxiv URL or local path
+  path: "./demo/document.tex"         # for mode=single
   dir: "./demo/demo_project"          # for mode=project
 
-# Output
+# ======== Output settings ========
 output:
   dir: "./my_output"
   compile: true
 
-# Project name (optional, for identifying the project)
-# When specified, results will be saved in a timestamped subdirectory under output.dir
-project_name: "MyLaTeXProject"
-
-# Translation settings
+# ======== Translation settings ========
 translation:
   target_lang: "Chinese"
   chunk_size: 3800
@@ -24,18 +25,18 @@ translation:
   fix_hyphen: true
   fix_command_adhesion: true
 
-# LLM settings
+# ===== LLM settings ===
 llm:
   backend: "openai"
   model: "gpt-4o-mini"
-  api_key_env: "LLM_API_KEY"
+  api_key: <-- replace with your own api key -->
   base_url: "https://api.openai.com/v1/"
   temperature: 0.1
   top_p: 0.9
   max_concurrent: 15
   max_retries: 3
 
-# Prompts settings (optional)
+# ======== Prompt settings =======
 prompts:
   system: "You are a professional LaTeX translator."
   user: "Translate the following LaTeX content to {target_lang}..."

@@ -731,6 +731,302 @@ def add_title_spacing(tex: str) -> str:
     return tex[:insert_pos] + preamble_addition + tex[insert_pos:]
 
 
+def generate_pandoc_compatibility_preamble(tex_content: str) -> str:
+    commands = set()
+
+    # ✅ 正确：raw string + 双反斜杠（因为正则里 \ 本身要转义）
+    newcmd_pattern = r'\\newcommand\s*\{\\([a-zA-Z]+)\}'
+    for match in re.finditer(newcmd_pattern, tex_content):
+        commands.add(match.group(1))
+
+    def_pattern = r'\\def\\([a-zA-Z]+)\s*\{'
+    for match in re.finditer(def_pattern, tex_content):
+        commands.add(match.group(1))
+
+    preamble_lines = ["% ===== Auto-generated Pandoc compatibility layer ====="]
+    for cmd in sorted(commands):
+        if cmd in {'naturals', 'N', 'reals', 'R', 'complex', 'C'}:
+            mapping = {
+                'naturals': r'\mathbb{N}',  # ✅ raw string
+                'N': r'\mathbb{N}',
+                'reals': r'\mathbb{R}',
+                'R': r'\mathbb{R}',
+                'complex': r'\mathbb{C}',
+                'C': r'\mathbb{C}',
+            }
+            fallback = mapping.get(cmd, r'\text{??}')
+            # ✅ 用双反斜杠或 raw string 拼接
+            line = f"\\providecommand{{\\{cmd}}}{{{fallback}}}"
+            preamble_lines.append(line)
+        else:
+            # Generic fallback: treat as text
+            line = f"\\providecommand{{\\{cmd}}}{{\\texttt{{\\\\{cmd}}}}}"
+            preamble_lines.append(line)
+
+    preamble_lines.append("% ===== End compatibility layer =====\n")
+    return "\n".join(preamble_lines)
+
+
+def pdf_to_docx(pdf_path: Path, docx_path: Path) -> bool:
+    """Convert PDF to DOCX using LibreOffice (fallback method)."""
+    try:
+        # Ensure output dir exists
+        docx_path.parent.mkdir(parents=True, exist_ok=True)
+
+        result = subprocess.run(
+            [
+                'soffice',
+                '--headless',
+                '--convert-to', 'docx',
+                '--outdir', str(docx_path.parent),
+                str(pdf_path)
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=60  # 1 minute max
+        )
+
+        # LibreOffice outputs file as <basename>.docx in outdir
+        expected_output = docx_path.parent / f"{pdf_path.stem}.docx"
+        if expected_output.exists():
+            if expected_output != docx_path:
+                expected_output.replace(docx_path)  # rename to desired name
+            return True
+        else:
+            logger.warning("LibreOffice conversion succeeded but output not found: %s", expected_output)
+            return False
+
+    except subprocess.TimeoutExpired:
+        logger.warning("LibreOffice conversion timed out.")
+        return False
+    except FileNotFoundError:
+        logger.warning("LibreOffice (soffice) not found. Install LibreOffice for PDF→DOCX fallback.")
+        return False
+    except Exception as e:
+        logger.warning("LibreOffice conversion failed: %s", e)
+        return False
+
+
+# ==============================
+# 1. Pandoc 兼容层生成
+# ==============================
+def generate_pandoc_compatibility_preamble(tex_content: str) -> str:
+    """Generate \providecommand stubs for undefined LaTeX commands."""
+    commands = set()
+
+    # Match \newcommand{\name}...
+    newcmd_pattern = r'\\newcommand\s*\{\\([a-zA-Z]+)\}'
+    for match in re.finditer(newcmd_pattern, tex_content):
+        commands.add(match.group(1))
+
+    # Match \def\name{...
+    def_pattern = r'\\def\\([a-zA-Z]+)\s*\{'
+    for match in re.finditer(def_pattern, tex_content):
+        commands.add(match.group(1))
+
+    # Add common mathbb commands if referenced
+    if r'\mathbb' in tex_content:
+        if r'\naturals' in tex_content or r'\N' in tex_content:
+            commands.update(['naturals', 'N'])
+        if r'\reals' in tex_content or r'\R' in tex_content:
+            commands.update(['reals', 'R'])
+        if r'\complex' in tex_content or r'\C' in tex_content:
+            commands.update(['complex', 'C'])
+
+    preamble_lines = ["% ===== Auto-generated Pandoc compatibility layer ====="]
+    for cmd in sorted(commands):
+        if cmd in {'naturals', 'N', 'reals', 'R', 'complex', 'C'}:
+            mapping = {
+                'naturals': r'\mathbb{N}',
+                'N': r'\mathbb{N}',
+                'reals': r'\mathbb{R}',
+                'R': r'\mathbb{R}',
+                'complex': r'\mathbb{C}',
+                'C': r'\mathbb{C}',
+            }
+            fallback = mapping.get(cmd, r'\text{??}')
+            preamble_lines.append(f"\\providecommand{{\\{cmd}}}{{{fallback}}}")
+        else:
+            # Generic fallback: show command name in typewriter
+            preamble_lines.append(f"\\providecommand{{\\{cmd}}}{{\\texttt{{\\\\{cmd}}}}}")
+
+    preamble_lines.append("% ===== End compatibility layer =====\n")
+    return "\n".join(preamble_lines)
+
+
+# ==============================
+# 2. LibreOffice 检测与转换
+# ==============================
+def is_libreoffice_available() -> bool:
+    soffice_exe = shutil.which("soffice.exe")
+    if not soffice_exe:
+        return False
+
+    # 创建临时用户配置目录（避免权限/中文路径问题）
+    import tempfile
+    user_profile = tempfile.mkdtemp(prefix="libreoffice_tmp_")
+
+    try:
+        result = subprocess.run(
+            [
+                soffice_exe,
+                "-env:UserInstallation=file:///" + user_profile.replace("\\", "/"),
+                "--headless",
+                "--version"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10
+        )
+        success = (result.returncode == 0 and "LibreOffice" in result.stdout)
+        return success
+    except:
+        return False
+    finally:
+        # 可选：清理临时目录（或保留供调试）
+        import shutil as sh
+        try:
+            sh.rmtree(user_profile, ignore_errors=True)
+        except:
+            pass
+
+
+def convert_pdf_to_docx_with_libreoffice(pdf_path: Path, docx_path: Path) -> bool:
+    # Find soffice.exe explicitly
+    soffice_exe = shutil.which("soffice.exe") or shutil.which("soffice")
+    if not soffice_exe:
+        logger.debug("LibreOffice not found in PATH.")
+        return False
+
+    try:
+        logger.info("🔄 Converting PDF→DOCX with LibreOffice...")
+        docx_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Use the full path we found
+        result = subprocess.run(
+            [
+                soffice_exe,  # ✅ Use full path, not just "soffice"
+                "--headless",
+                "--convert-to", "docx",
+                "--outdir", str(docx_path.parent),
+                str(pdf_path)
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=60
+        )
+
+        expected_output = docx_path.parent / f"{pdf_path.stem}.docx"
+        if expected_output.exists():
+            if expected_output != docx_path:
+                expected_output.replace(docx_path)
+            logger.info("✅ LibreOffice conversion succeeded.")
+            return True
+        else:
+            logger.warning("LibreOffice returned success but output not found.")
+            return False
+
+    except Exception as e:
+        logger.warning("LibreOffice conversion failed: %s", e)
+        return False
+
+# ==============================
+# 3. pdf2docx 兜底转换
+# ==============================
+def convert_pdf_to_docx_with_pdf2docx(pdf_path: Path, docx_path: Path) -> bool:
+    try:
+        from pdf2docx import Converter
+        logger.info("🔄 Converting PDF→DOCX with pdf2docx (pure Python)...")
+        docx_path.parent.mkdir(parents=True, exist_ok=True)
+        cv = Converter(str(pdf_path))
+        cv.convert(str(docx_path), start=0, end=None)
+        cv.close()
+        return docx_path.exists()
+    except ImportError:
+        logger.debug("pdf2docx not installed.")
+        return False
+    except Exception as e:
+        logger.debug("pdf2docx conversion error: %s", e)
+        return False
+
+
+# ==============================
+# 4. 统一 PDF→DOCX 入口
+# ==============================
+def convert_pdf_to_docx(pdf_path: Path, docx_path: Path) -> bool:
+    if not pdf_path.exists():
+        logger.error("PDF not found for DOCX conversion: %s", pdf_path)
+        return False
+    if convert_pdf_to_docx_with_libreoffice(pdf_path, docx_path):
+        return True
+    if convert_pdf_to_docx_with_pdf2docx(pdf_path, docx_path):
+        return True
+    return False
+
+
+# ==============================
+# 5. Pandoc 转换（带兼容层）
+# ==============================
+def try_pandoc_conversion(
+        original_project_dir: Path,
+        main_tex: str,
+        output_pdf_path: Path,
+        docx_output_path: Path,
+        wants_bib: bool
+) -> bool:
+    try:
+        basename = Path(main_tex).stem
+        with open(original_project_dir / main_tex, 'r', encoding='utf-8') as f:
+            raw_tex = f.read()
+        compat_preamble = generate_pandoc_compatibility_preamble(raw_tex)
+
+        if "\\documentclass" in raw_tex:
+            compat_tex = raw_tex.replace("\\documentclass", compat_preamble + "\\documentclass", 1)
+        else:
+            compat_tex = compat_preamble + raw_tex
+
+        temp_tex = original_project_dir / f"{basename}_pandoc_compat.tex"
+        with open(temp_tex, 'w', encoding='utf-8') as f:
+            f.write(compat_tex)
+
+        # Build pandoc command
+        pandoc_cmd = [
+            'pandoc', str(temp_tex), '-o', str(docx_output_path),
+            '--standalone', '--wrap=none',
+            '--from', 'latex+tex_math_dollars'
+        ]
+        bib_files = [f for f in original_project_dir.iterdir() if f.suffix == '.bib']
+        if wants_bib and bib_files:
+            pandoc_cmd.extend(['--citeproc', '--bibliography', str(bib_files[0])])
+
+        res = subprocess.run(
+            pandoc_cmd,
+            cwd=original_project_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=30
+        )
+        success = (res.returncode == 0)
+        if success:
+            logger.info("✅ Pandoc conversion succeeded: %s", docx_output_path)
+        else:
+            logger.warning("⚠️ Pandoc failed. Output:\n%s", res.stdout)
+        return success
+    except FileNotFoundError:
+        logger.warning("⚠️ Pandoc not found. Install pandoc (https://pandoc.org).")
+        return False
+    except Exception as e:
+        logger.warning("⚠️ Pandoc conversion error: %s", e)
+        return False
+    finally:
+        temp_tex = original_project_dir / f"{Path(main_tex).stem}_pandoc_compat.tex"
+        temp_tex.unlink(missing_ok=True)
+
+
 def compile_project(project_dir: Path, output_pdf_path: Path):
     """
     Compile a LaTeX project directory to generate a PDF file.
@@ -740,6 +1036,7 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
         output_pdf_path (Path): Path where the output PDF should be saved
     """
     # Find all .tex files in the project directory
+    original_project_dir = Path(project_dir).resolve()
     candidate_tex_files = {}
     for file in project_dir.iterdir():
         if file.is_file() and file.suffix == '.tex':
@@ -777,7 +1074,9 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
     tex_content = fix_citation_issues(tex_content)
     tex_content = fix_tikz_issues(tex_content)
     tex_content = fix_underline_issues(tex_content)
+    # 添加标题间距设置
     tex_content = add_title_spacing(tex_content)
+    # 添加占位符行注释处理
     tex_content = comment_out_placeholder_lines(tex_content)
 
     # Write back the processed file (overwrite the main .tex file)
@@ -885,7 +1184,7 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
 
             # 检查是否收敛：.aux 未变化
             if prev_aux_hash is not None and current_aux_hash == prev_aux_hash:
-                logger.info("✅ .aux file unchanged → layout converged after pass %d.", pass_num - 1)
+                logger.info("✅  .aux file unchanged → layout converged after pass %d.", pass_num - 1)
                 converged = True
                 break
 
@@ -899,12 +1198,29 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
         if pdf_file.exists():
             output_pdf_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(pdf_file), str(output_pdf_path))
-            logger.info("✅ PDF compiled successfully: %s", output_pdf_path)
-            compilation_successful = True
+            logger.info("✅  PDF compiled successfully: %s", output_pdf_path)
         else:
             logger.error("❌ Final PDF not found: %s", pdf_file)
-            compilation_successful = False
 
     except Exception as e:
         logger.exception("💥 Unexpected error during compilation: %s", e)
-        compilation_successful = False
+
+    # ===== After PDF is successfully generated =====
+    if output_pdf_path.exists():
+        docx_output_path = output_pdf_path.with_suffix('.docx')
+        pandoc_success = try_pandoc_conversion(
+            original_project_dir=project_dir,
+            main_tex=main_tex,  # 确保 main_tex 在作用域内
+            output_pdf_path=output_pdf_path,
+            docx_output_path=docx_output_path,
+            wants_bib=wants_bib  # 确保 wants_bib 在作用域内
+        )
+
+        if not pandoc_success:
+            logger.info("🔄 Falling back to PDF → DOCX conversion...")
+            if convert_pdf_to_docx(output_pdf_path, docx_output_path):
+                logger.info("✅  Fallback conversion succeeded: %s", docx_output_path)
+            else:
+                logger.warning("❌ All DOCX conversion methods failed. Only PDF is available.")
+    else:
+        logger.info("📄 Skipping DOCX conversion: PDF not generated.")
