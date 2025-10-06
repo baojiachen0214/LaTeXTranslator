@@ -234,22 +234,23 @@ def escape_underscores_skip_keys(tex: str) -> str:
     # Split the document into preamble and body
     doc_begin_match = re.search(r'\\begin\s*{\s*document\s*}', tex)
     doc_end_match = re.search(r'\\end\s*{\s*document\s*}', tex)
-    
-    if doc_begin_match and doc_end_match:
-        preamble = tex[:doc_begin_match.end()]
-        body = tex[doc_begin_match.end():doc_end_match.start()]
-        postamble = tex[doc_end_match.start():]
-        
-        # Process only the body part
+
+    # Helper function to process a chunk (body, preamble, or postamble)
+    def _process_chunk(chunk: str, is_preamble_or_postamble: bool = False) -> str:
         skip_cmds = {
             'cite', 'citet', 'citep', 'citeyear', 'bibitem', 'label', 'ref',
             'pageref', 'addbibresource', 'bibliography', 'includegraphics',
             'url', 'href', 'path', 'lstinputlisting'
         }
 
+        # Commands that should have underscores escaped in their arguments
+        process_cmds = {
+            'texttt', 'textbf', 'textit', 'emph'
+        }
+
         out = []
         i = 0
-        n = len(body)
+        n = len(chunk)
 
         # reuse states from your original code
         verbatim_envs = {"verbatim", "lstlisting", "minted"}
@@ -262,11 +263,11 @@ def escape_underscores_skip_keys(tex: str) -> str:
         verb_delim = None
 
         while i < n:
-            ch = body[i]
+            ch = chunk[i]
 
             # begin{env}
-            if not (in_verbatim_env or in_verb) and body.startswith(r'\begin{', i):
-                m = re.match(r'\\begin\{([a-zA-Z*]+)\}', body[i:])
+            if not (in_verbatim_env or in_verb) and chunk.startswith(r'\begin{', i):
+                m = re.match(r'\\begin\{([a-zA-Z*]+)\}', chunk[i:])
                 if m:
                     env = m.group(1)
                     out.append(m.group(0))
@@ -277,8 +278,8 @@ def escape_underscores_skip_keys(tex: str) -> str:
                     continue
 
             # end{env}
-            if in_verbatim_env and body.startswith(r'\end{', i):
-                m = re.match(r'\\end\{([a-zA-Z*]+)\}', body[i:])
+            if in_verbatim_env and chunk.startswith(r'\end{', i):
+                m = re.match(r'\\end\{([a-zA-Z*]+)\}', chunk[i:])
                 if m:
                     env = m.group(1)
                     out.append(m.group(0))
@@ -294,16 +295,16 @@ def escape_underscores_skip_keys(tex: str) -> str:
                 continue
 
             # \verb handling
-            if not in_verb and body.startswith(r'\verb', i):
+            if not in_verb and chunk.startswith(r'\verb', i):
                 j = i + len(r'\verb')
                 if j < n:
-                    if body[j] == '*':
+                    if chunk[j] == '*':
                         j += 1
                     if j < n:
-                        delim = body[j]
+                        delim = chunk[j]
                         in_verb = True
                         verb_delim = delim
-                        out.append(body[i:j + 1])
+                        out.append(chunk[i:j + 1])
                         i = j + 1
                         continue
             if in_verb:
@@ -320,12 +321,12 @@ def escape_underscores_skip_keys(tex: str) -> str:
 
             # math modes (same logic)
             if not (in_inline_math or in_display_math or in_bracket_math):
-                if body.startswith('$$', i):
+                if chunk.startswith('$$', i):
                     in_display_math = True
                     out.append('$$')
                     i += 2
                     continue
-                if body.startswith('\\[', i):
+                if chunk.startswith('\\[', i):
                     in_bracket_math = True
                     out.append('\\[')
                     i += 2
@@ -336,12 +337,12 @@ def escape_underscores_skip_keys(tex: str) -> str:
                     i += 1
                     continue
             else:
-                if in_display_math and body.startswith('$$', i):
+                if in_display_math and chunk.startswith('$$', i):
                     in_display_math = False
                     out.append('$$')
                     i += 2
                     continue
-                if in_bracket_math and body.startswith('\\]', i):
+                if in_bracket_math and chunk.startswith('\\]', i):
                     in_bracket_math = False
                     out.append('\\]')
                     i += 2
@@ -360,8 +361,8 @@ def escape_underscores_skip_keys(tex: str) -> str:
                 # capture command name
                 j = i + 1
                 cmd_name = []
-                while j < n and re.match(r'[A-Za-z]+', body[j]):
-                    cmd_name.append(body[j])
+                while j < n and re.match(r'[A-Za-z]+', chunk[j]):
+                    cmd_name.append(chunk[j])
                     j += 1
                 cmd_name = ''.join(cmd_name)
                 # Append command name
@@ -369,31 +370,53 @@ def escape_underscores_skip_keys(tex: str) -> str:
                 i = j
                 # If next non-space char is {, we have an argument; decide whether to skip it
                 # preserve spacing
-                while i < n and body[i].isspace():
-                    out.append(body[i])
+                while i < n and chunk[i].isspace():
+                    out.append(chunk[i])
                     i += 1
-                if i < n and body[i] == '{':
+                if i < n and chunk[i] == '{':
                     # find matching brace (simple stack)
                     brace_start = i
                     depth = 0
                     k = i
                     while k < n:
-                        if body[k] == '{':
+                        if chunk[k] == '{':
                             depth += 1
-                        elif body[k] == '}':
+                        elif chunk[k] == '}':
                             depth -= 1
                             if depth == 0:
                                 break
                         k += 1
                     # k now at matching }
                     if k < n:
-                        arg = body[brace_start:k + 1]
+                        arg = chunk[brace_start:k + 1]
                         if cmd_name in skip_cmds:
                             # copy raw argument
                             out.append(arg)
+                        elif cmd_name in process_cmds:
+                            # process argument: replace unescaped '_' -> '\_'
+                            processed_arg = []
+                            ii = 0
+                            while ii < len(arg):
+                                c = arg[ii]
+                                if c == '\\':  # keep escape sequences as-is
+                                    if ii + 1 < len(arg):
+                                        processed_arg.append(c)
+                                        processed_arg.append(arg[ii + 1])
+                                        ii += 2
+                                        continue
+                                    else:
+                                        processed_arg.append(c)
+                                        ii += 1
+                                        continue
+                                if c == '_':
+                                    processed_arg.append(r'\_')
+                                    ii += 1
+                                    continue
+                                processed_arg.append(c)
+                                ii += 1
+                            out.append(''.join(processed_arg))
                         else:
-                            # process argument recursively with simple underscore replacement but
-                            # avoid deep re-entry to keep conservative: replace unescaped '_' -> '\_'
+                            # For all other commands, also escape underscores in arguments
                             processed_arg = []
                             ii = 0
                             while ii < len(arg):
@@ -419,204 +442,7 @@ def escape_underscores_skip_keys(tex: str) -> str:
                         continue
                     else:
                         # unmatched brace -> just append rest
-                        out.append(body[i:])
-                        break
-                else:
-                    # no brace-arg, continue loop
-                    continue
-
-            # default underscore handling outside protected contexts
-            if ch == '_':
-                out.append(r'\_')
-                i += 1
-                continue
-
-            out.append(ch)
-            i += 1
-
-        # Combine preamble, processed body, and postamble
-        return preamble + ''.join(out) + postamble
-    else:
-        # If document structure not found, process the entire document as before
-        skip_cmds = {
-            'cite', 'citet', 'citep', 'citeyear', 'bibitem', 'label', 'ref',
-            'pageref', 'addbibresource', 'bibliography', 'includegraphics',
-            'url', 'href', 'path', 'lstinputlisting'
-        }
-
-        out = []
-        i = 0
-        n = len(tex)
-
-        # reuse states from your original code
-        verbatim_envs = {"verbatim", "lstlisting", "minted"}
-        in_inline_math = False
-        in_display_math = False
-        in_bracket_math = False
-        in_verbatim_env = False
-        verbatim_env_name = None
-        in_verb = False
-        verb_delim = None
-
-        while i < n:
-            ch = tex[i]
-
-            # begin{env}
-            if not (in_verbatim_env or in_verb) and tex.startswith(r'\begin{', i):
-                m = re.match(r'\\begin\{([a-zA-Z*]+)\}', tex[i:])
-                if m:
-                    env = m.group(1)
-                    out.append(m.group(0))
-                    i += len(m.group(0))
-                    if env in verbatim_envs:
-                        in_verbatim_env = True
-                        verbatim_env_name = env
-                    continue
-
-            # end{env}
-            if in_verbatim_env and tex.startswith(r'\end{', i):
-                m = re.match(r'\\end\{([a-zA-Z*]+)\}', tex[i:])
-                if m:
-                    env = m.group(1)
-                    out.append(m.group(0))
-                    i += len(m.group(0))
-                    if env == verbatim_env_name:
-                        in_verbatim_env = False
-                        verbatim_env_name = None
-                    continue
-
-            if in_verbatim_env:
-                out.append(ch)
-                i += 1
-                continue
-
-            # \verb handling
-            if not in_verb and tex.startswith(r'\verb', i):
-                j = i + len(r'\verb')
-                if j < n:
-                    if tex[j] == '*':
-                        j += 1
-                    if j < n:
-                        delim = tex[j]
-                        in_verb = True
-                        verb_delim = delim
-                        out.append(tex[i:j + 1])
-                        i = j + 1
-                        continue
-            if in_verb:
-                if ch == verb_delim:
-                    out.append(ch)
-                    in_verb = False
-                    verb_delim = None
-                    i += 1
-                    continue
-                else:
-                    out.append(ch)
-                    i += 1
-                    continue
-
-            # math modes (same logic)
-            if not (in_inline_math or in_display_math or in_bracket_math):
-                if tex.startswith('$$', i):
-                    in_display_math = True
-                    out.append('$$')
-                    i += 2
-                    continue
-                if tex.startswith('\\[', i):
-                    in_bracket_math = True
-                    out.append('\\[')
-                    i += 2
-                    continue
-                if ch == '$':
-                    in_inline_math = True
-                    out.append(ch)
-                    i += 1
-                    continue
-            else:
-                if in_display_math and tex.startswith('$$', i):
-                    in_display_math = False
-                    out.append('$$')
-                    i += 2
-                    continue
-                if in_bracket_math and tex.startswith('\\]', i):
-                    in_bracket_math = False
-                    out.append('\\]')
-                    i += 2
-                    continue
-                if in_inline_math and ch == '$':
-                    in_inline_math = False
-                    out.append(ch)
-                    i += 1
-                    continue
-                out.append(ch)
-                i += 1
-                continue
-
-            # If backslash command with { ... } argument, maybe skip argument if command in skip_cmds
-            if ch == '\\':
-                # capture command name
-                j = i + 1
-                cmd_name = []
-                while j < n and re.match(r'[A-Za-z]+', tex[j]):
-                    cmd_name.append(tex[j])
-                    j += 1
-                cmd_name = ''.join(cmd_name)
-                # Append command name
-                out.append('\\' + cmd_name)
-                i = j
-                # If next non-space char is {, we have an argument; decide whether to skip it
-                # preserve spacing
-                while i < n and tex[i].isspace():
-                    out.append(tex[i])
-                    i += 1
-                if i < n and tex[i] == '{':
-                    # find matching brace (simple stack)
-                    brace_start = i
-                    depth = 0
-                    k = i
-                    while k < n:
-                        if tex[k] == '{':
-                            depth += 1
-                        elif tex[k] == '}':
-                            depth -= 1
-                            if depth == 0:
-                                break
-                        k += 1
-                    # k now at matching }
-                    if k < n:
-                        arg = tex[brace_start:k + 1]
-                        if cmd_name in skip_cmds:
-                            # copy raw argument
-                            out.append(arg)
-                        else:
-                            # process argument recursively with simple underscore replacement but
-                            # avoid deep re-entry to keep conservative: replace unescaped '_' -> '\_'
-                            processed_arg = []
-                            ii = 0
-                            while ii < len(arg):
-                                c = arg[ii]
-                                if c == '\\':  # keep escape sequences as-is
-                                    if ii + 1 < len(arg):
-                                        processed_arg.append(c)
-                                        processed_arg.append(arg[ii + 1])
-                                        ii += 2
-                                        continue
-                                    else:
-                                        processed_arg.append(c)
-                                        ii += 1
-                                        continue
-                                if c == '_':
-                                    processed_arg.append(r'\_')
-                                    ii += 1
-                                    continue
-                                processed_arg.append(c)
-                                ii += 1
-                            out.append(''.join(processed_arg))
-                        i = k + 1
-                        continue
-                    else:
-                        # unmatched brace -> just append rest
-                        out.append(tex[i:])
+                        out.append(chunk[i:])
                         break
                 else:
                     # no brace-arg, continue loop
@@ -632,6 +458,21 @@ def escape_underscores_skip_keys(tex: str) -> str:
             i += 1
 
         return ''.join(out)
+
+    if doc_begin_match and doc_end_match:
+        preamble = tex[:doc_begin_match.end()]
+        body = tex[doc_begin_match.end():doc_end_match.start()]
+        postamble = tex[doc_end_match.start():]
+
+        # Process ALL parts: preamble, body, postamble
+        processed_preamble = _process_chunk(preamble, is_preamble_or_postamble=True)
+        processed_body = _process_chunk(body)
+        processed_postamble = _process_chunk(postamble, is_preamble_or_postamble=True)
+
+        return processed_preamble + processed_body + processed_postamble
+    else:
+        # If document structure not found, process the entire document
+        return _process_chunk(tex)
 
 
 # --- Added: Replace documentclass with ctexart (preserve options) ---
@@ -818,9 +659,9 @@ def fix_underline_issues(tex: str) -> str:
         r'\\begin\{multline\*\}.*?\\end\{multline\*\}',
         r'\\begin\{flalign\}.*?\\end\{flalign\}',
         r'\\begin\{flalign\*\}.*?\\end\{flalign\*\}',
-        r'\$\$.*?\$\$',  # 无编号公式
-        r'\$.*?\$',  # 行内公式
-        r'\\\[.*?\\\]'  # 另一种无编号公式
+        # r'\$\$.*?\$\$',  # 无编号公式
+        # r'\$.*?\$',  # 行内公式
+        # r'\\\[.*?\\\]'  # 另一种无编号公式
     ]
 
     # 使用非贪婪匹配并添加适当的边界，避免跨环境匹配
@@ -836,6 +677,58 @@ def fix_underline_issues(tex: str) -> str:
     fixed_tex = combined_pattern.sub(replace_underscore, tex)
 
     return fixed_tex
+
+
+def add_title_spacing(tex: str) -> str:
+    """
+    强制添加titlesec包和标题间距设置到导言区
+    """
+    # 查找\begin{document}的位置
+    doc_begin_match = re.search(r'\\begin\s*{\s*document\s*}', tex)
+    if not doc_begin_match:
+        # 如果没有找到\begin{document}，在文件末尾导言区添加（在\documentclass之后）
+        docclass_match = re.search(r'\\documentclass(?:\[.*?\])?\{.*?\}', tex)
+        if docclass_match:
+            docclass_end = docclass_match.end()
+            preamble_addition = "\n\\usepackage{titlesec}\n" + \
+                               "\\titlespacing*{\\section}{0pt}{12pt}{8pt}\n" + \
+                               "\\titlespacing*{\\subsection}{0pt}{10pt}{6pt}\n" + \
+                               "\\titlespacing*{\\subsubsection}{0pt}{8pt}{4pt}\n" + \
+                               "\\setlength{\\parskip}{0.5em}\n" + \
+                               "\\setlength{\\parsep}{0.5em}\n"
+            return tex[:docclass_end] + preamble_addition + tex[docclass_end:]
+        else:
+            # 如果连\documentclass都找不到，添加到文件开头
+            preamble_addition = "\\usepackage{titlesec}\n" + \
+                               "\\titlespacing*{\\section}{0pt}{12pt}{8pt}\n" + \
+                               "\\titlespacing*{\\subsection}{0pt}{10pt}{6pt}\n" + \
+                               "\\titlespacing*{\\subsubsection}{0pt}{8pt}{4pt}\n" + \
+                               "\\setlength{\\parskip}{0.5em}\n" + \
+                               "\\setlength{\\parsep}{0.5em}\n"
+            return preamble_addition + tex
+    
+    # 在\begin{document}前添加包引入和设置
+    insert_pos = doc_begin_match.start()
+    
+    # 检查是否已经存在titlesec包，避免重复添加
+    if '\\usepackage{titlesec}' in tex[:insert_pos]:
+        # 如果已经存在titlesec包，只添加间距设置
+        preamble_addition = "\n% 标题间距设置\n" + \
+                           "\\titlespacing*{\\section}{0pt}{12pt}{8pt}\n" + \
+                           "\\titlespacing*{\\subsection}{0pt}{10pt}{6pt}\n" + \
+                           "\\titlespacing*{\\subsubsection}{0pt}{8pt}{4pt}\n" + \
+                           "\\setlength{\\parskip}{0.5em}\n" + \
+                           "\\setlength{\\parsep}{0.5em}\n"
+    else:
+        # 添加包引入和间距设置
+        preamble_addition = "\n\\usepackage{titlesec}\n" + \
+                           "\\titlespacing*{\\section}{0pt}{12pt}{8pt}\n" + \
+                           "\\titlespacing*{\\subsection}{0pt}{10pt}{6pt}\n" + \
+                           "\\titlespacing*{\\subsubsection}{0pt}{8pt}{4pt}\n" + \
+                           "\\setlength{\\parskip}{0.5em}\n" + \
+                           "\\setlength{\\parsep}{0.5em}\n"
+    
+    return tex[:insert_pos] + preamble_addition + tex[insert_pos:]
 
 
 def compile_project(project_dir: Path, output_pdf_path: Path):
@@ -884,7 +777,7 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
     tex_content = fix_citation_issues(tex_content)
     tex_content = fix_tikz_issues(tex_content)
     tex_content = fix_underline_issues(tex_content)
-    # 添加占位符行注释处理
+    tex_content = add_title_spacing(tex_content)
     tex_content = comment_out_placeholder_lines(tex_content)
 
     # Write back the processed file (overwrite the main .tex file)
@@ -929,130 +822,89 @@ def compile_project(project_dir: Path, output_pdf_path: Path):
     try:
         basename = Path(main_tex).stem
         project_dir = Path(project_dir)
+        aux_file = project_dir / f"{basename}.aux"
+        pdf_file = project_dir / f"{basename}.pdf"
 
-        # ===== 清理“非关键”辅助文件（可选，避免干扰）=====
-        # 注意：不要删 .aux, .bbl, .bcf, .blg — 它们对多轮编译至关重要！
-        non_critical_exts = ['.log', '.toc', '.lof', '.lot', '.out', '.fls', '.fdb_latexmk']
+        # ===== 彻底清理非关键缓存（保留 .aux, .bbl, .bcf, .blg）=====
+        non_critical_exts = [
+            '.log', '.toc', '.lof', '.lot', '.out', '.fls', '.fdb_latexmk',
+            '.idx', '.ind', '.ilg', '.thm', '.vrb', '.nav', '.snm', '.tdo', '.run.xml'
+        ]
         for ext in non_critical_exts:
-            aux_file = project_dir / f"{basename}{ext}"
-            if aux_file.exists():
+            f = project_dir / f"{basename}{ext}"
+            if f.exists():
                 try:
-                    aux_file.unlink()
-                    logger.debug("Removed non-critical auxiliary file: %s", aux_file)
+                    f.unlink()
+                    logger.debug("Removed non-critical file: %s", f)
                 except Exception as e:
-                    logger.warning("Failed to remove %s: %s", aux_file, e)
+                    logger.warning("Failed to remove %s: %s", f, e)
 
-        # ===== Step 1: First xelatex (ignore failure) =====
-        logger.info("1) Running first xelatex compilation (errors ignored)...")
-        p1 = subprocess.run(
+        # ===== Step 1: First xelatex =====
+        logger.info("→ Running initial xelatex (pass 1)...")
+        subprocess.run(
             ['xelatex', '-interaction=nonstopmode', main_tex],
             cwd=project_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding='utf-8',
-            errors='replace'
+            stdout=subprocess.DEVNULL,  # 减少日志噪音，除非调试
+            stderr=subprocess.STDOUT
         )
-        logger.debug("xelatex (1) exit %s", p1.returncode)
-        if p1.returncode != 0:
-            logger.warning("xelatex (1) failed, but continuing anyway (common for first pass).")
-            logger.debug("xelatex (1) output:\n%s", p1.stdout)
-        else:
-            logger.info("xelatex (1) succeeded.")
 
-        # ===== Detect bibliography needs =====
+        # ===== Detect bibliography =====
         tex_source = (project_dir / main_tex).read_text(encoding='utf-8', errors='ignore')
         uses_biblatex = ('\\usepackage{biblatex}' in tex_source) or ('\\addbibresource' in tex_source)
         has_bib = any(f.suffix == '.bib' for f in project_dir.iterdir())
         wants_bib = has_bib or ('\\bibliography' in tex_source) or uses_biblatex or force_bibtex
 
-        # ===== Run bibtex/biber (if needed) =====
         if wants_bib:
             if uses_biblatex:
-                logger.info("2) Detected biblatex -> running biber %s", basename)
-                p_bib = subprocess.run(
-                    ['biber', basename],
-                    cwd=project_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace'
-                )
-                logger.debug("biber exit %s", p_bib.returncode)
-                if p_bib.returncode != 0:
-                    logger.error("biber failed. Output:\n%s", p_bib.stdout)
-                    blg = project_dir / f"{basename}.blg"
-                    if blg.exists():
-                        logger.error("---- .blg (tail) ----\n%s", blg.read_text(errors='ignore')[-4000:])
-                    # 注意：这里可以选择继续 or 中断。通常 biber 失败是致命的。
-                    # raise subprocess.CalledProcessError(p_bib.returncode, p_bib.args, output=p_bib.stdout)
+                logger.info("→ Running biber...")
+                subprocess.run(['biber', basename], cwd=project_dir, stdout=subprocess.DEVNULL)
             else:
-                logger.info("2) Detected classic BibTeX -> running bibtex %s", basename)
-                p_bib = subprocess.run(
-                    ['bibtex', basename],
-                    cwd=project_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace'
-                )
-                logger.debug("bibtex exit %s", p_bib.returncode)
-                if p_bib.returncode != 0:
-                    logger.error("bibtex failed. Output:\n%s", p_bib.stdout)
-                    blg = project_dir / f"{basename}.blg"
-                    if blg.exists():
-                        logger.error("---- .blg (tail) ----\n%s", blg.read_text(errors='ignore')[-4000:])
-                    # 同样，可选择是否中断
+                logger.info("→ Running bibtex...")
+                subprocess.run(['bibtex', basename], cwd=project_dir, stdout=subprocess.DEVNULL)
 
-        else:
-            logger.info("No bibliography detected, skipping bibtex/biber.")
+        # ===== Step 2+: Adaptive xelatex passes (up to 5 total, including first) =====
+        max_passes = 5
+        prev_aux_hash = None
+        converged = False
 
-        # ===== Step 3: Second xelatex (critical for references) =====
-        logger.info("3) Running second xelatex compilation...")
-        p2 = subprocess.run(
-            ['xelatex', '-interaction=nonstopmode', main_tex],
-            cwd=project_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding='utf-8',
-            errors='replace'
-        )
-        logger.debug("xelatex (2) exit %s", p2.returncode)
-        if p2.returncode != 0:
-            logger.warning("xelatex (2) failed, but proceeding to third pass.")
-            logger.debug("xelatex (2) output:\n%s", p2.stdout)
+        for pass_num in range(2, max_passes + 1):
+            # 保存当前 .aux 内容的哈希（如果存在）
+            current_aux_hash = None
+            if aux_file.exists():
+                import hashlib
+                current_aux_hash = hashlib.md5(aux_file.read_bytes()).hexdigest()
 
-        # ===== Step 4: Third xelatex (final pass) =====
-        logger.info("4) Running third xelatex compilation...")
-        p3 = subprocess.run(
-            ['xelatex', '-interaction=nonstopmode', main_tex],
-            cwd=project_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding='utf-8',
-            errors='replace'
-        )
-        logger.debug("xelatex (3) exit %s", p3.returncode)
+            logger.info(f"→ Running xelatex (pass {pass_num})...")
 
-        # ===== Check final PDF =====
-        expected_pdf = project_dir / f"{basename}.pdf"
-        if expected_pdf.exists():
+            result = subprocess.run(
+                ['xelatex', '-interaction=nonstopmode', main_tex],
+                cwd=project_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT
+            )
+
+            # 检查是否收敛：.aux 未变化
+            if prev_aux_hash is not None and current_aux_hash == prev_aux_hash:
+                logger.info("✅ .aux file unchanged → layout converged after pass %d.", pass_num - 1)
+                converged = True
+                break
+
+            prev_aux_hash = current_aux_hash
+
+            # 如果是最后一次，也退出
+            if pass_num == max_passes:
+                logger.warning("⚠️ Max passes (%d) reached without convergence.", max_passes)
+
+        # ===== Final check =====
+        if pdf_file.exists():
             output_pdf_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(expected_pdf), str(output_pdf_path))
-            logger.info("PDF compiled successfully: %s", output_pdf_path)
+            shutil.move(str(pdf_file), str(output_pdf_path))
+            logger.info("✅ PDF compiled successfully: %s", output_pdf_path)
             compilation_successful = True
         else:
-            logger.error("Final PDF not generated: %s", expected_pdf)
-            # 尝试打印 .log 尾部
-            log_file = project_dir / f"{basename}.log"
-            if log_file.exists():
-                logger.error("---- .log (tail) ----\n%s", log_file.read_text(errors='ignore')[-4000:])
+            logger.error("❌ Final PDF not found: %s", pdf_file)
             compilation_successful = False
 
     except Exception as e:
-        logger.exception("Unexpected error during compilation: %s", e)
+        logger.exception("💥 Unexpected error during compilation: %s", e)
         compilation_successful = False
