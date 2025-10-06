@@ -48,8 +48,49 @@ class TexTranslator:
         # Initialize placeholder manager to protect sensitive content
         pm = PlaceholderManager()
 
+        # Pre-process to translate \title{} content directly
+        doc_begin_match = re.search(r'\\begin\s*{\s*document\s*}', content)
+        if doc_begin_match:
+            preamble_end = doc_begin_match.start()
+            preamble = content[:preamble_end]
+            body_and_on = content[preamble_end:]
+            
+            # Find \title{...} in preamble and translate its argument
+            # Handle nested braces properly
+            title_pattern = r'\\title\s*{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)}'
+            title_matches = list(re.finditer(title_pattern, preamble))
+            
+            # Translate title content with a more direct prompt to avoid verbose responses
+            translated_preamble = preamble
+            offset = 0
+            for match in title_matches:
+                title_arg = match.group(1)
+                # Create a more specific prompt for title translation to minimize verbose responses
+                title_prompt = f"Translate the following academic paper title to {self.config.translation.target_lang}. Return ONLY the translated text without any explanations:\n\n{title_arg}"
+                # Translate the title argument
+                translated_title_arg = await self.llm.translate(title_prompt, self.config.translation.target_lang)
+                
+                # Clean up potential verbose LLM responses by extracting only the translated content
+                # Remove common verbose prefixes LLMs might add
+                translated_title_arg = self._clean_title_translation(translated_title_arg)
+                
+                # Replace in the preamble with translated content
+                start = match.start(1) + offset  # Adjust for previous replacements
+                end = match.end(1) + offset
+                translated_preamble = translated_preamble[:start] + translated_title_arg + translated_preamble[end:]
+                offset += len(translated_title_arg) - len(title_arg)
+            
+            # Protect the entire preamble except for \title content which has been translated
+            preamble_placeholder = pm.add(translated_preamble, "PREAMBLE")
+            
+            # Combine protected preamble with the rest of the content
+            temp_content = preamble_placeholder + body_and_on
+        else:
+            # If no \begin{document} found, process normally
+            temp_content = content
+            
         # Replace protected patterns (equations, citations, etc.) with placeholders
-        protected_content = pm.replace_in_text(content, PROTECTED_PATTERNS)
+        protected_content = pm.replace_in_text(temp_content, PROTECTED_PATTERNS)
 
         # Split the protected content into manageable chunks for translation
         chunks = self.chunker.split(protected_content)
@@ -170,3 +211,24 @@ class TexTranslator:
                 logger.error(f"Exception during full-document retry: {e}")
 
         return restored_content
+
+    def _clean_title_translation(self, translated_text: str) -> str:
+        """
+        Clean up verbose LLM responses for title translation.
+        Extract only the translated title and remove any additional explanations.
+        """
+        # If the response contains line breaks or is significantly longer, try to extract the title
+        lines = translated_text.strip().split('\n')
+        if len(lines) > 1:
+            # If there are multiple lines, take the first non-empty line that looks like a title
+            for line in lines:
+                line = line.strip()
+                # Skip lines that look like instructions or explanations
+                if line and not (line.startswith("The") or line.startswith("Here") or 
+                                line.startswith("This") or "translation" in line.lower()):
+                    return line
+            # If we didn't find a suitable line, return the first line
+            return lines[0].strip()
+        
+        # For single line, just return it stripped
+        return translated_text.strip()
