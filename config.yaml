@@ -3,7 +3,7 @@ project_name: "LaTeXProject"
 mode: "project"
 
 input:
-  dir: "./demo/demo_project"         # for mode=project
+  dir: "./demo/original_paper"         # for mode=project
 
 output:
   dir: "./output"

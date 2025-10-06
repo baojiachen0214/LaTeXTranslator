@@ -91,8 +91,8 @@ mode: "project"  # arxiv | single | project
 # ======== Input settings ========
 input:
   url: "https://arxiv.org/..."        # arxiv URL or local path
-  path: "./demo/document.tex"         # for mode=single
-  dir: "./demo/demo_project"          # for mode=project
+  path: "./demo/demo_document.tex"         # for mode=single
+  dir: "./demo/original_paper"          # for mode=project
 
 # ======== Output settings ========
 output:

@@ -91,8 +91,8 @@ mode: "project"  # arxiv | single | project
 # ======== 输入设置 ========
 input:
   url: "https://arxiv.org/..."        # arxiv URL 或本地路径
-  path: "./demo/document.tex"         # 用于 mode=single 模式
-  dir: "./demo/demo_project"          # 用于 mode=project 模式
+  path: "./demo/demo_document.tex"         # 用于 mode=single 模式
+  dir: "./demo/original_paper"          # 用于 mode=project 模式
 
 # ======== 输出设置 ========
 output:

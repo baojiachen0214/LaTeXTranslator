@@ -1,0 +1,207 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumerate}
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{natbib}
+\usepackage{xcolor}
+\usepackage{listings}
+
+% Page setup
+\geometry{margin=1in}
+
+% Theorem environment definitions
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+
+% Code style settings
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    stringstyle=\color{red},
+    commentstyle=\color{green!60!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true
+}
+
+% Title information
+\title{Comprehensive LaTeX Syntax Example Document}
+\author{
+    Zhang San \\
+    \small Department of Computer Science, XYZ University \\
+    \small \href{mailto:zhangsan@example.com}{zhangsan@example.com}
+    \and
+    Li Si \\
+    \small Institute of Mathematics, ABC Research Center \\
+    \small \href{mailto:lisi@example.com}{lisi@example.com}
+}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document demonstrates various core LaTeX syntax elements, including document structure, mathematical formulas, figure insertion, list environments, algorithm pseudocode, and reference citations. Through this comprehensive example, one can quickly understand the main functionalities and usage methods of LaTeX.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+
+LaTeX is a typesetting system based on TeX, particularly suitable for generating high-quality technical and mathematical documents \cite{lamport1994latex}. Compared to ordinary word processing software, it uses markup commands to control document formatting, enabling better handling of complex mathematical formulas and professional typesetting.
+
+\subsection{Key Features}
+LaTeX has the following main characteristics:
+\begin{itemize}
+    \item Powerful mathematical formula typesetting capabilities
+    \item Automatic generation of table of contents, cross-references, and bibliographies
+    \item Highly customizable document styles
+    \item Support for complex table and figure排版
+    \item Suitable for collaborative editing of large documents
+\end{itemize}
+
+\section{Mathematical Formulas}
+\label{sec:math}
+
+\subsection{Inline Formulas}
+Inline formulas such as $a^2 + b^2 = c^2$ (Pythagorean theorem) and $e^{i\pi} + 1 = 0$ (Euler's identity) can be directly embedded in text.
+
+\subsection{Displayed Formulas}
+Complex formulas are usually typeset on separate lines:
+\begin{equation}
+    \int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+    \label{eq:gaussian}
+\end{equation}
+
+\subsection{Multi-line Formulas}
+Use the align environment for multi-line formulas:
+\begin{align}
+    \sin(A+B) &= \sin A \cos B + \cos A \sin B \\
+    \cos(A+B) &= \cos A \cos B - \sin A \sin B
+\end{align}
+
+\subsection{Matrices}
+Matrix representation example:
+\[
+\mathbf{M} = \begin{pmatrix}
+    m_{11} & m_{12} & \cdots & m_{1n} \\
+    m_{21} & m_{22} & \cdots & m_{2n} \\
+    \vdots & \vdots & \ddots & \vdots \\
+    m_{m1} & m_{m2} & \cdots & m_{mn}
+\end{pmatrix}
+\]
+
+\section{Theorems and Definitions}
+\label{sec:theorems}
+
+\begin{definition}
+Let $f(x)$ be defined on the interval $[a,b]$. If for any $\epsilon > 0$, there exists $\delta > 0$ such that when $|x - x_0| < \delta$, we have $|f(x) - f(x_0)| < \epsilon$, then $f(x)$ is said to be continuous at $x_0$.
+\end{definition}
+
+\begin{theorem}
+If a function $f(x)$ is continuous on the closed interval $[a,b]$, then $f(x)$ is uniformly continuous on $[a,b]$.
+\end{theorem}
+
+\begin{lemma}
+If a sequence $\{a_n\}$ is monotonic and bounded, then $\{a_n\}$ must converge.
+\end{lemma}
+
+\section{Figures and Tables}
+\label{sec:figures}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{example-image-a}
+        \caption{Sample image A}
+        \label{fig:sub1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{example-image-b}
+        \caption{Sample image B}
+        \label{fig:sub2}
+    \end{subfigure}
+    \caption{Example of subfigures}
+    \label{fig:main}
+\end{figure}
+
+Table \ref{tab:example} shows a simple data comparison.
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{|c|c|c|}
+        \hline
+        Method & Accuracy (\%) & Runtime (s) \\
+        \hline
+        A & 85.2 & 12.3 \\
+        B & 90.5 & 18.7 \\
+        C & 92.1 & 22.5 \\
+        \hline
+    \end{tabular}
+    \caption{Performance comparison of different methods}
+    \label{tab:example}
+\end{table}
+
+\section{Algorithms}
+\label{sec:algorithms}
+
+The following algorithm \ref{alg:euclidean} describes the Euclidean algorithm for finding the greatest common divisor.
+
+\begin{algorithm}
+    \caption{Euclidean Algorithm}
+    \label{alg:euclidean}
+    \begin{algorithmic}[1]
+        \Function{GCD}{$a, b$}
+            \While{$b \neq 0$}
+                \State $r \gets a \mod b$
+                \State $a \gets b$
+                \State $b \gets r$
+            \EndWhile
+            \Return $a$
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm}
+
+\section{Code Examples}
+\label{sec:code}
+
+A simple Python function for calculating factorial is shown below:
+
+\begin{lstlisting}
+def factorial(n):
+    """Calculate the factorial of a non-negative integer"""
+    if n < 0:
+        raise ValueError("Factorial is not defined for negative numbers")
+    result = 1
+    for i in range(1, n+1):
+        result *= i
+    return result
+
+# Example usage
+print(factorial(5))  # Output: 120
+\end{lstlisting}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+This document has covered various essential elements of LaTeX typesetting. By mastering these basic syntax and environments, one can create professional and well-formatted technical documents. For more advanced features, refer to the comprehensive LaTeX documentation and related packages.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
